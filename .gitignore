@@ -3,6 +3,13 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .env
+.env.*
+client_secret*.json
+credentials*.json
+*credentials.json
+token*.json
+.auth/
+secrets/
 *.db
 dist/
 build/

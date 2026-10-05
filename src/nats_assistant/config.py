@@ -22,6 +22,18 @@ class Settings(BaseSettings):
         default_factory=lambda: Path.home() / ".local" / "share" / "nats-assistant" / "nats.db"
     )
     timezone: str = Field(default_factory=_system_timezone_name)
+    google_calendar_enabled: bool = False
+    google_calendar_credentials_path: Path = Field(
+        default_factory=lambda: Path.home() / ".config" / "nats-assistant" / "google" / "client_secret.json"
+    )
+    google_calendar_token_path: Path = Field(
+        default_factory=lambda: Path.home() / ".local" / "share" / "nats-assistant" / "google" / "token.json"
+    )
+    google_calendar_id: str = Field(default="primary", min_length=1)
+    google_calendar_timeout_seconds: float = Field(default=2.0, gt=0, le=30)
+    google_calendar_fetch_limit: int = Field(default=200, ge=1, le=1000)
+    calendar_max_events: int = Field(default=20, ge=1, le=100)
+    calendar_lookahead_days: int = Field(default=7, ge=1, le=31)
 
     model_config = SettingsConfigDict(env_prefix="NATS_", case_sensitive=False, extra="ignore")
 
@@ -37,6 +49,15 @@ class Settings(BaseSettings):
     def validate_timezone(cls, value: str) -> str:
         ZoneInfo(value)
         return value
+
+    @field_validator("google_calendar_credentials_path", "google_calendar_token_path", mode="before")
+    @classmethod
+    def validate_google_paths(cls, value):
+        path = Path(value).expanduser().resolve()
+        project_root = Path(__file__).resolve().parents[2]
+        if (project_root / "pyproject.toml").is_file() and path.is_relative_to(project_root):
+            raise ValueError("Google auth files must be stored outside the source repository")
+        return path
 
     @model_validator(mode="after")
     def derive_database_file(self) -> "Settings":

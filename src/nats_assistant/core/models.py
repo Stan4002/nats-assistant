@@ -2,6 +2,7 @@ from typing import Any, Optional
 
 from pydantic import BaseModel, Field
 
+from nats_assistant.core.calendar import CalendarSummary
 from nats_assistant.core.tasks import TaskResponse
 
 
@@ -21,6 +22,7 @@ class HomeSummary(BaseModel):
     next: Optional[str] = None
     upcoming: list[Any] = Field(default_factory=list)
     tasks: TaskSummary = Field(default_factory=TaskSummary)
+    calendar: CalendarSummary = Field(default_factory=CalendarSummary)
     captures: dict[str, int] = Field(default_factory=lambda: {"inbox_count": 0})
     comms: CommsSummary = Field(default_factory=CommsSummary)
 

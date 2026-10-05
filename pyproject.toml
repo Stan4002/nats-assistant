@@ -13,6 +13,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+google = [
+  "google-auth[requests]>=2.38.0,<3",
+  "google-auth-oauthlib>=1.2.0,<2",
+  "requests>=2.32.0,<3",
+]
 dev = [
   "pytest>=8.0.0",
   "httpx>=0.27.0",
@@ -29,7 +34,7 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [project.scripts]
-nats-assistant = "nats_assistant.quick_entry:main"
+nats-assistant = "nats_assistant.cli:main"
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

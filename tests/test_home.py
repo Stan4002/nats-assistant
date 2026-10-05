@@ -16,6 +16,9 @@ def test_home_endpoint(client: TestClient):
     assert isinstance(payload["tasks"], dict)
     assert isinstance(payload["comms"], dict)
     assert payload["tasks"]["pending"] == 0
+    assert payload["calendar"] == {
+        "status": "not_connected", "today_count": 0, "next": None, "events": [], "truncated": False,
+    }
     assert payload["comms"]["attention_count"] == 0
 
 
