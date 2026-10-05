@@ -28,5 +28,8 @@ package-dir = {"" = "src"}
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[project.scripts]
+nats-assistant = "nats_assistant.quick_entry:main"
+
 [tool.pytest.ini_options]
 pythonpath = ["src"]

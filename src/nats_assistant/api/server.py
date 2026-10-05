@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from sqlalchemy.orm import sessionmaker
 
+from nats_assistant.api.routes.captures import router as captures_router
 from nats_assistant.api.routes.home import router as home_router
 from nats_assistant.api.routes.status import router as status_router
 from nats_assistant.api.routes.tasks import router as tasks_router
@@ -27,6 +28,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(status_router)
     app.include_router(home_router)
     app.include_router(tasks_router)
+    app.include_router(captures_router)
     return app
 
 

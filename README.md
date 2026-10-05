@@ -11,7 +11,7 @@ The assistant owns local state, provider integration boundaries, normalization, 
 
 ## Current milestone
 
-This project is in Milestone 2: local task domain and persistence.
+This project is in Milestone 4: passive HUD migration plus quick entry.
 
 The service currently exposes:
 
@@ -22,9 +22,19 @@ The service currently exposes:
 - `GET /v1/tasks/{task_id}`
 - `PATCH /v1/tasks/{task_id}`
 - `DELETE /v1/tasks/{task_id}`
+- `GET /v1/captures`
+- `POST /v1/captures`
+- `GET /v1/captures/{capture_id}`
+- `PATCH /v1/captures/{capture_id}`
 
-Providers are not implemented yet.
-HUD integration is not implemented yet.
+The backend is authoritative for task summaries and capture inbox state. The passive HUD reads task and home information from `/v1/home` when available and falls back to its last successful cached values when the backend is unreachable, preserving a graceful offline UI without hardcoded demo tasks.
+
+Quick entry is available via the `nats-assistant` console script:
+
+```bash
+nats-assistant quick task --title "Review release notes"
+nats-assistant quick capture --text "Remember to sync with design"
+```
 
 ## Architecture direction
 

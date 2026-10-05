@@ -19,6 +19,12 @@ class Priority(str, Enum):
     CRITICAL = "critical"
 
 
+class CaptureStatus(str, Enum):
+    INBOX = "inbox"
+    PROCESSED = "processed"
+    ARCHIVED = "archived"
+
+
 class UTCDateTime(TypeDecorator[datetime]):
     impl = DateTime
     cache_ok = True
@@ -49,6 +55,25 @@ class Task(Base):
         default=Priority.NORMAL,
     )
     due: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    source: Mapped[str] = mapped_column(String(100), nullable=False, default="nats")
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), nullable=False, default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), nullable=False, default=lambda: datetime.now(timezone.utc)
+    )
+
+
+class Capture(Base):
+    __tablename__ = "captures"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[CaptureStatus] = mapped_column(
+        SqlEnum(CaptureStatus, name="capture_status", values_callable=lambda enum: [item.value for item in enum]),
+        nullable=False,
+        default=CaptureStatus.INBOX,
+    )
     source: Mapped[str] = mapped_column(String(100), nullable=False, default="nats")
     created_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), nullable=False, default=lambda: datetime.now(timezone.utc)

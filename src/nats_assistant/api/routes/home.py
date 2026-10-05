@@ -8,7 +8,7 @@ from nats_assistant.api.dependencies import get_db_session
 from nats_assistant.config import Settings
 from nats_assistant.core.models import HomeSummary
 from nats_assistant.core.tasks import TaskResponse
-from nats_assistant.storage.repositories import TaskRepository
+from nats_assistant.storage.repositories import CaptureRepository, TaskRepository
 
 router = APIRouter(prefix="/v1", tags=["home"])
 
@@ -22,6 +22,7 @@ def get_home(request: Request, session: Session = Depends(get_db_session)) -> Ho
     end_local = datetime.combine(now_local.date() + timedelta(days=1), time.min, tzinfo=local_timezone)
 
     repository = TaskRepository(session)
+    captures_repository = CaptureRepository(session)
     tasks = repository.list_relevant(limit=5)
     return HomeSummary(
         tasks={
@@ -31,5 +32,6 @@ def get_home(request: Request, session: Session = Depends(get_db_session)) -> Ho
                 end_local.astimezone(timezone.utc),
             ),
             "items": [TaskResponse.model_validate(task) for task in tasks],
-        }
+        },
+        captures={"inbox_count": captures_repository.count_inbox()},
     )

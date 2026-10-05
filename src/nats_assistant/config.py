@@ -1,4 +1,3 @@
-from functools import lru_cache
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -52,6 +51,5 @@ class Settings(BaseSettings):
         return self.data_dir
 
 
-@lru_cache
 def get_settings() -> Settings:
     return Settings()

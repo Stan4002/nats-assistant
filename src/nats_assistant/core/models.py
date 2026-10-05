@@ -21,6 +21,7 @@ class HomeSummary(BaseModel):
     next: Optional[str] = None
     upcoming: list[Any] = Field(default_factory=list)
     tasks: TaskSummary = Field(default_factory=TaskSummary)
+    captures: dict[str, int] = Field(default_factory=lambda: {"inbox_count": 0})
     comms: CommsSummary = Field(default_factory=CommsSummary)
 
 

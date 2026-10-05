@@ -3,8 +3,50 @@ from datetime import datetime, timezone
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
+from nats_assistant.core.captures import CaptureCreate, CaptureStatus, CaptureUpdate
 from nats_assistant.core.tasks import TaskCreate, TaskUpdate
-from nats_assistant.storage.models import Priority, Task
+from nats_assistant.storage.models import Capture, Priority, Task
+
+
+class CaptureRepository:
+    def __init__(self, session: Session):
+        self.session = session
+
+    def create(self, capture_data: CaptureCreate) -> Capture:
+        values = capture_data.model_dump()
+        values["status"] = capture_data.status if hasattr(capture_data, "status") else CaptureStatus.INBOX
+        values["source"] = values.get("source") or "nats"
+        now = datetime.now(timezone.utc)
+        if "status" not in values or values["status"] is None:
+            values["status"] = CaptureStatus.INBOX
+        capture = Capture(**values, created_at=now, updated_at=now)
+        self.session.add(capture)
+        self.session.commit()
+        self.session.refresh(capture)
+        return capture
+
+    def list(self, status: CaptureStatus | None = None) -> list[Capture]:
+        statement = select(Capture)
+        if status is not None:
+            statement = statement.where(Capture.status.is_(status))
+        statement = statement.order_by(Capture.created_at.asc())
+        return list(self.session.scalars(statement))
+
+    def get(self, capture_id: str) -> Capture | None:
+        return self.session.get(Capture, capture_id)
+
+    def update(self, capture: Capture, changes: CaptureUpdate) -> Capture:
+        for field, value in changes.model_dump(exclude_unset=True).items():
+            if field == "status" and value is not None:
+                value = CaptureStatus(value)
+            setattr(capture, field, value)
+        capture.updated_at = datetime.now(timezone.utc)
+        self.session.commit()
+        self.session.refresh(capture)
+        return capture
+
+    def count_inbox(self) -> int:
+        return self.session.scalar(select(func.count()).select_from(Capture).where(Capture.status.is_(CaptureStatus.INBOX))) or 0
 
 
 class TaskRepository:
