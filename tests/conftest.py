@@ -1,9 +1,18 @@
 import pytest
+import os
 import socket
 from fastapi.testclient import TestClient
 
 from nats_assistant.api.server import create_app
 from nats_assistant.config import Settings
+
+
+@pytest.fixture(autouse=True)
+def isolated_user_config(monkeypatch, tmp_path):
+    for name in list(os.environ):
+        if name.startswith("NATS_"):
+            monkeypatch.delenv(name)
+    monkeypatch.setenv("NATS_CONFIG_FILE", str(tmp_path / "config" / "config.toml"))
 
 
 @pytest.fixture(autouse=True)

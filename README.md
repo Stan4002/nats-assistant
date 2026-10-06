@@ -11,7 +11,7 @@ The assistant owns local state, provider integration boundaries, normalization, 
 
 ## Current milestone
 
-This project is in Milestone 5: read-only calendar integration and unified daily context.
+This project is in Milestone 5.5: persistent configuration, official server startup, and user-service autostart.
 
 The service currently exposes:
 
@@ -60,11 +60,13 @@ python -m pip install --upgrade pip
 python -m pip install -e '.[dev]'
 ```
 
-Run the server:
+Run the server using the installed CLI (activation is only a development convenience):
 
 ```bash
-uvicorn nats_assistant.main:app --host 127.0.0.1 --port 8765 --reload
+.venv/bin/nats-assistant serve
 ```
+
+For normal use, configure the user service below. `nats_assistant.main:app` remains compatible with direct Uvicorn development workflows.
 
 Run tests:
 
@@ -140,21 +142,23 @@ chmod 700 ~/.config/nats-assistant/google
 # ~/.config/nats-assistant/google/client_secret.json
 chmod 600 ~/.config/nats-assistant/google/client_secret.json
 
-export NATS_TIMEZONE=Africa/Lusaka
+.venv/bin/nats-assistant config set timezone Africa/Lusaka
+.venv/bin/nats-assistant config set google_calendar_id primary
+# Optional overrides for non-default external OAuth file locations:
 export NATS_GOOGLE_CALENDAR_CREDENTIALS_PATH="$HOME/.config/nats-assistant/google/client_secret.json"
 export NATS_GOOGLE_CALENDAR_TOKEN_PATH="$HOME/.local/share/nats-assistant/google/token.json"
-export NATS_GOOGLE_CALENDAR_ID=primary
 
 .venv/bin/nats-assistant calendar google auth
 ```
 
 Only this explicit command opens a browser. It requests `https://www.googleapis.com/auth/calendar.readonly`, uses desktop OAuth with PKCE and a loopback callback on `127.0.0.1`, and waits up to 180 seconds for approval. The token is atomically written with mode `0600` outside the repository. The OAuth client file and stored access/refresh tokens are private local files, never source assets. Existing tokens refresh automatically during event reads; normal startup never requests interactive authorization.
 
-Enable the provider and start/restart the service with the same environment:
+Enable the provider persistently, then start the server or restart an installed service:
 
 ```bash
-export NATS_GOOGLE_CALENDAR_ENABLED=true
-.venv/bin/uvicorn nats_assistant.main:app --host 127.0.0.1 --port 8765
+.venv/bin/nats-assistant config set google_calendar_enabled true
+.venv/bin/nats-assistant serve
+# If the user service is already running, use service restart instead.
 curl http://127.0.0.1:8765/v1/status
 curl http://127.0.0.1:8765/v1/home
 ```
@@ -173,7 +177,7 @@ curl http://127.0.0.1:8765/v1/home
 
 Config paths expand `~` and are rejected if they resolve inside this source checkout. No auth files are created until you authenticate or refresh an existing token. Network I/O uses explicit timeouts with no event polling loop or calendar writes. The home route runs in FastAPI's worker pool; provider errors become controlled states. Token refresh and HTTP requests are individually bounded; this is not a guarantee of a strict wall-clock response deadline.
 
-To disable Calendar, set `NATS_GOOGLE_CALENDAR_ENABLED=false` and restart the service. `/v1/home` continues returning tasks, with calendar status `not_connected`.
+To disable Calendar persistently, run `nats-assistant config set google_calendar_enabled false` and restart the service. `NATS_GOOGLE_CALENDAR_ENABLED=false` is still a process-level override. `/v1/home` continues returning tasks, with calendar status `not_connected`.
 
 Troubleshooting:
 
@@ -190,3 +194,97 @@ git diff --check
 ```
 
 Calendar tests use fake providers and mock Google transport/OAuth; test socket connections are blocked. They cover disabled/missing auth, empty and populated calendars, all-day events, timezone/DST boundaries, next-event selection, ordering, result caps, failures without task loss, payload isolation, and private token storage. They do not contact Google or require real credentials.
+
+## Persistent configuration
+
+The shared settings API reads `~/.config/nats-assistant/config.toml`. If `XDG_CONFIG_HOME` is set, it uses `$XDG_CONFIG_HOME/nats-assistant/config.toml`; `NATS_CONFIG_FILE` can select another file. A missing file is a valid first-run state: the server uses defaults and Calendar is disabled. Malformed TOML, unsupported keys, or invalid effective values fail startup with a controlled error.
+
+```toml
+timezone = "Africa/Lusaka"
+google_calendar_enabled = true
+google_calendar_id = "primary"
+```
+
+Precedence is explicit `Settings(...)` arguments, then `NATS_` environment variables, then persisted TOML values, then defaults. No working-directory `.env` file is loaded. Existing environment overrides continue to work, but an export in a terminal is not a persistent setting for a future login. Service installation pins the selected config file path in the generated unit; it does not copy terminal exports into that file.
+
+```bash
+.venv/bin/nats-assistant config set timezone Africa/Lusaka
+.venv/bin/nats-assistant config set google_calendar_enabled true
+.venv/bin/nats-assistant config set google_calendar_id primary
+.venv/bin/nats-assistant config get timezone
+.venv/bin/nats-assistant config show
+```
+
+`show` and `get` report effective values. `set` validates the persisted values independently of environment overrides and preserves the previous file on validation failure. It atomically writes mode `0600` files, creating the config directory with mode `0700` when needed. Settings apply to a running API server after restart. This read/write API can later support a settings GUI; no GTK settings application is implemented yet.
+
+Known configurable keys include `host`, `port`, `timezone`, `data_dir`, `database_file`, the Google enablement/calendar-ID/path/timeout/fetch-limit settings, and calendar preview/lookahead limits. OAuth file **paths** are settings; OAuth token/client-secret **contents** are never settings. Unknown keys, including `access_token`, `refresh_token`, and `client_secret`, are rejected. Default OAuth locations remain `~/.config/nats-assistant/google/client_secret.json` and `~/.local/share/nats-assistant/google/token.json`. Config commands never open or print their contents. Keep these files private; do not paste credentials into any ordinary setting.
+
+`serve` binds `127.0.0.1:8765` by default. `host`/`NATS_HOST` must be a loopback IP address, and `port`/`NATS_PORT` must be in `1–65535`. Uvicorn owns SIGTERM/SIGINT handling and graceful shutdown; startup/shutdown and HTTP logs go to the terminal or user journal. Startup creates providers without launching OAuth. Enabled Google reads load the existing token on `/v1/home`, refresh it when possible, and require interactive authorization again only if credentials have expired without refresh access or have been revoked. Missing auth exposes `not_connected` and tasks continue working.
+
+## Login startup with systemd
+
+Install the backend package first. For this checkout the existing virtualenv is sufficient; no root or virtualenv activation is required:
+
+```bash
+.venv/bin/nats-assistant service install
+.venv/bin/nats-assistant service enable
+# Stop any manually running Uvicorn server before starting the service.
+.venv/bin/nats-assistant service start
+.venv/bin/nats-assistant service status
+```
+
+`install` writes `$XDG_CONFIG_HOME/systemd/user/nats-assistant.service`, defaulting to `~/.config/systemd/user/nats-assistant.service`, and runs `systemctl --user daemon-reload`. It does not enable or start the service. `enable` enables login startup; `start` starts this session's instance. The unit is wanted by the user's `default.target`, with restart on failure after three seconds. It runs as the logged-in user, and ends when the user service manager stops; this milestone does not configure lingering or system-wide services.
+
+The shipped template is `src/nats_assistant/nats-assistant.service.in`. A generated unit has this structure (placeholder paths are substituted and quoted safely):
+
+```ini
+# Generated by nats-assistant service install.
+[Unit]
+Description=NATS Assistant
+After=network-online.target
+
+[Service]
+Type=simple
+Environment="NATS_CONFIG_FILE=<absolute user config path>"
+ExecStart="<resolved nats-assistant executable>" serve
+Restart=on-failure
+RestartSec=3
+UMask=0077
+
+[Install]
+WantedBy=default.target
+```
+
+No `EnvironmentFile` is needed: the application reads TOML itself. Units contain no OAuth credentials or copied environment secrets. Executable discovery prefers `nats-assistant` alongside the running Python interpreter, then the invoked console script, then PATH. A development unit points to the existing virtualenv's executable; future packages can provide `/usr/bin/nats-assistant` or another packaging-managed location without changing the service architecture. Moving/removing a development virtualenv requires reinstalling the unit. The installer refuses to overwrite units it did not generate. The template is included in Python package data.
+
+Commands and logs:
+
+```bash
+nats-assistant service restart
+nats-assistant service stop
+nats-assistant service disable
+systemctl --user status nats-assistant
+journalctl --user -u nats-assistant -f
+```
+
+In the development checkout use `.venv/bin/nats-assistant` when the command is not on PATH. Service commands invoke fixed `systemctl --user` argv lists, never a shell. `status` preserves systemctl's nonzero exit code when the unit is inactive or missing.
+
+Uninstall the generated service (stops it, disables autostart, removes the unit, and reloads the user manager):
+
+```bash
+.venv/bin/nats-assistant service uninstall
+```
+
+Uninstall preserves the SQLite database, config file, and OAuth files. Delete those separately only if you intend to remove your data or authorization.
+
+Runtime troubleshooting:
+
+- Calendar is `not_connected` after login: check `config get google_calendar_enabled`, the installed unit's `NATS_CONFIG_FILE`, and the token path. Persist settings instead of relying on terminal exports. Restart after edits. Service online, provider enabled, token present, and Calendar API online are separate states; `/v1/status`, `config show`, and `/v1/home.calendar.status` expose the existing relevant information without adding endpoints.
+- Invalid config: correct the TOML/known values; errors omit supplied values and OAuth response contents. `config set` can replace a well-formed invalid value, but syntax errors or unsupported keys must first be fixed in the file.
+- Port already in use: stop the manually launched development server before `service start`. Keep port `8765` for the current HUD client, which uses that port.
+- Missing executable after moving a checkout: rerun `service install` using the new installed executable, then restart.
+- Unsupported executable path: systemd rejects executable names containing quotes or backslashes; use a checkout/install location without those characters. Spaces, percent signs, and dollar signs are handled by the generator.
+- User manager unavailable: run service setup in a normal logged-in user session with systemd; do not use `sudo`. `serve` remains available for manual operation.
+- OAuth revoked/expired: authorization is always explicit via `calendar google auth`; normal startup never opens a browser.
+
+Runtime tests isolate config files and mock all systemctl calls. They cover persistence across fresh processes, precedence, validation/redaction, private writes, serve arguments, service generation/management, and task availability with Google disabled or unauthenticated. They do not enable or start the real user service.

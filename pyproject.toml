@@ -33,6 +33,9 @@ package-dir = {"" = "src"}
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+nats_assistant = ["*.service.in"]
+
 [project.scripts]
 nats-assistant = "nats_assistant.cli:main"
 

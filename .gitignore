@@ -4,6 +4,8 @@ __pycache__/
 .pytest_cache/
 .env
 .env.*
+config.toml
+nats.env
 client_secret*.json
 credentials*.json
 *credentials.json
