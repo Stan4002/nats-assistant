@@ -16,7 +16,7 @@ CONFIG_KEYS = frozenset({
     "google_calendar_enabled", "google_calendar_id",
     "google_calendar_credentials_path", "google_calendar_token_path",
     "google_calendar_timeout_seconds", "google_calendar_fetch_limit",
-    "calendar_max_events", "calendar_lookahead_days",
+    "calendar_max_events", "calendar_lookahead_days", "calendar_refresh_seconds",
 })
 
 
@@ -85,6 +85,7 @@ class Settings(BaseSettings):
     google_calendar_fetch_limit: int = Field(default=200, ge=1, le=1000)
     calendar_max_events: int = Field(default=20, ge=1, le=100)
     calendar_lookahead_days: int = Field(default=7, ge=1, le=31)
+    calendar_refresh_seconds: int = Field(default=120, ge=30, le=3600)
 
     model_config = SettingsConfigDict(env_prefix="NATS_", case_sensitive=False, extra="ignore")
 

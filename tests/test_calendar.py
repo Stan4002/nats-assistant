@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from fastapi.testclient import TestClient
@@ -9,6 +9,7 @@ from nats_assistant.api.routes import home as home_route
 from nats_assistant.api.server import create_app
 from nats_assistant.config import Settings
 from nats_assistant.core.calendar import CalendarEvent, CalendarEventBatch, CalendarState
+from nats_assistant.core.calendar_cache import CalendarCache
 from nats_assistant.core.calendar_context import build_calendar_summary
 from nats_assistant.providers.calendar import CalendarProvider, CalendarProviderError
 
@@ -40,11 +41,16 @@ class FakeCalendarProvider(CalendarProvider):
 NOW = datetime.fromisoformat("2026-10-05T12:00:00+02:00")
 
 
+def local_noon(tz_name: str = "UTC") -> datetime:
+    return datetime.now(ZoneInfo(tz_name)).replace(hour=12, minute=0, second=0, microsecond=0)
+
+
 def test_calendar_not_connected_without_provider():
     summary = build_calendar_summary(None, NOW)
     assert summary.model_dump() == {
         "status": CalendarState.NOT_CONNECTED, "today_count": 0,
         "next": None, "events": [], "truncated": False,
+        "updated_at": None, "stale": False,
     }
 
 
@@ -160,6 +166,66 @@ def test_home_with_fake_provider_returns_only_normalized_events(tmp_path, monkey
         assert payload["calendar"]["next"]["id"] == "meeting"
         assert payload["calendar"]["events"][0]["start"] == "2026-10-05T14:00:00+02:00"
         assert payload["tasks"] == {"pending": 0, "due_today": 0, "items": []}
+
+
+def test_cache_keeps_old_batch_while_provider_is_slow_or_failing(tmp_path):
+    now = local_noon("UTC")
+    settings = Settings(data_dir=tmp_path, timezone="UTC", google_calendar_enabled=False, calendar_refresh_seconds=30)
+    provider = FakeCalendarProvider([event("meeting", now + timedelta(hours=2), now + timedelta(hours=3))])
+    cache = CalendarCache(provider, settings)
+    cache.refresh_now()
+    provider.error = CalendarProviderError(CalendarState.OFFLINE)
+    cache.refresh_now()
+    summary = cache.summary_for(now)
+    assert summary.status == CalendarState.OFFLINE
+    assert summary.stale is True
+    assert summary.events[0].id == "meeting"
+
+
+def test_stale_summary_keeps_only_todays_events_when_offline(tmp_path):
+    settings = Settings(data_dir=tmp_path, timezone="Africa/Lusaka", google_calendar_enabled=False, calendar_refresh_seconds=30)
+    today = event("today", NOW + timedelta(hours=1), NOW + timedelta(hours=2))
+    later = event("later", NOW + timedelta(days=1), NOW + timedelta(days=1, hours=1))
+    provider = FakeCalendarProvider([later, today])
+    cache = CalendarCache(provider, settings)
+    cache.refresh_now()
+    provider.error = CalendarProviderError(CalendarState.OFFLINE)
+    cache.refresh_now()
+    summary = cache.summary_for(NOW)
+    assert summary.status == CalendarState.OFFLINE
+    assert summary.stale is True
+    assert [item.id for item in summary.events] == ["today"]
+    assert summary.today_count == 1
+
+
+def test_stale_summary_does_not_use_ended_event_as_next(tmp_path):
+    settings = Settings(data_dir=tmp_path, timezone="Africa/Lusaka", google_calendar_enabled=False, calendar_refresh_seconds=30)
+    ended = event("ended", NOW - timedelta(hours=2), NOW - timedelta(hours=1))
+    provider = FakeCalendarProvider([ended])
+    cache = CalendarCache(provider, settings)
+    cache.refresh_now()
+    provider.error = CalendarProviderError(CalendarState.OFFLINE)
+    cache.refresh_now()
+    summary = cache.summary_for(NOW)
+    assert summary.next is None
+
+
+def test_stale_summary_excludes_future_day_from_today_count(tmp_path):
+    settings = Settings(
+        data_dir=tmp_path,
+        timezone="Africa/Lusaka",
+        google_calendar_enabled=False,
+        calendar_refresh_seconds=30,
+        calendar_lookahead_days=7,
+    )
+    later = event("later", NOW + timedelta(days=3), NOW + timedelta(days=3, hours=1))
+    provider = FakeCalendarProvider([later])
+    cache = CalendarCache(provider, settings)
+    cache.refresh_now()
+    provider.error = CalendarProviderError(CalendarState.OFFLINE)
+    cache.refresh_now()
+    summary = cache.summary_for(NOW)
+    assert summary.today_count == 0
 
 
 def test_raw_provider_result_is_rejected():

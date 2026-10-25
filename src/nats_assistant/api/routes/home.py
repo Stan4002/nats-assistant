@@ -6,7 +6,6 @@ from sqlalchemy.orm import Session
 
 from nats_assistant.api.dependencies import get_db_session
 from nats_assistant.config import Settings
-from nats_assistant.core.calendar_context import build_calendar_summary
 from nats_assistant.core.models import HomeSummary
 from nats_assistant.core.tasks import TaskResponse
 from nats_assistant.storage.repositories import CaptureRepository, TaskRepository
@@ -22,6 +21,8 @@ def get_home(request: Request, session: Session = Depends(get_db_session)) -> Ho
     start_local = datetime.combine(now_local.date(), time.min, tzinfo=local_timezone)
     end_local = datetime.combine(now_local.date() + timedelta(days=1), time.min, tzinfo=local_timezone)
 
+    cache = request.app.state.calendar_cache
+    summary = cache.summary_for(now_local)
     repository = TaskRepository(session)
     captures_repository = CaptureRepository(session)
     tasks = repository.list_relevant(limit=5)
@@ -35,10 +36,5 @@ def get_home(request: Request, session: Session = Depends(get_db_session)) -> Ho
             "items": [TaskResponse.model_validate(task) for task in tasks],
         },
         captures={"inbox_count": captures_repository.count_inbox()},
-        calendar=build_calendar_summary(
-            request.app.state.calendar_provider,
-            now_local,
-            max_events=settings.calendar_max_events,
-            lookahead_days=settings.calendar_lookahead_days,
-        ),
+        calendar=summary,
     )
