@@ -1,0 +1,2 @@
+- Stale calendar summaries now apply the same today/`next` filtering as live ones; only status flags mark them stale.
+- Added background calendar cache support so `/v1/home` stays responsive during slow or offline Google Calendar lookups and still reports stale cached data.
