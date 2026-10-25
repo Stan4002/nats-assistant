@@ -18,6 +18,7 @@ def test_home_endpoint(client: TestClient):
     assert payload["tasks"]["pending"] == 0
     assert payload["calendar"] == {
         "status": "not_connected", "today_count": 0, "next": None, "events": [], "truncated": False,
+        "updated_at": None, "stale": False,
     }
     assert payload["comms"]["attention_count"] == 0
 

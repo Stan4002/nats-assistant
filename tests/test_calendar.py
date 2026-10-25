@@ -183,16 +183,15 @@ def test_cache_keeps_old_batch_while_provider_is_slow_or_failing(tmp_path):
 
 
 def test_stale_summary_keeps_only_todays_events_when_offline(tmp_path):
-    now = local_noon("UTC")
-    settings = Settings(data_dir=tmp_path, timezone="UTC", google_calendar_enabled=False, calendar_refresh_seconds=30)
-    today = event("today", now + timedelta(hours=1), now + timedelta(hours=2))
-    later = event("later", now + timedelta(days=1), now + timedelta(days=1, hours=1))
+    settings = Settings(data_dir=tmp_path, timezone="Africa/Lusaka", google_calendar_enabled=False, calendar_refresh_seconds=30)
+    today = event("today", NOW + timedelta(hours=1), NOW + timedelta(hours=2))
+    later = event("later", NOW + timedelta(days=1), NOW + timedelta(days=1, hours=1))
     provider = FakeCalendarProvider([later, today])
     cache = CalendarCache(provider, settings)
     cache.refresh_now()
     provider.error = CalendarProviderError(CalendarState.OFFLINE)
     cache.refresh_now()
-    summary = cache.summary_for(now)
+    summary = cache.summary_for(NOW)
     assert summary.status == CalendarState.OFFLINE
     assert summary.stale is True
     assert [item.id for item in summary.events] == ["today"]
@@ -200,34 +199,32 @@ def test_stale_summary_keeps_only_todays_events_when_offline(tmp_path):
 
 
 def test_stale_summary_does_not_use_ended_event_as_next(tmp_path):
-    now = local_noon("UTC")
-    settings = Settings(data_dir=tmp_path, timezone="UTC", google_calendar_enabled=False, calendar_refresh_seconds=30)
-    ended = event("ended", now - timedelta(hours=2), now - timedelta(hours=1))
+    settings = Settings(data_dir=tmp_path, timezone="Africa/Lusaka", google_calendar_enabled=False, calendar_refresh_seconds=30)
+    ended = event("ended", NOW - timedelta(hours=2), NOW - timedelta(hours=1))
     provider = FakeCalendarProvider([ended])
     cache = CalendarCache(provider, settings)
     cache.refresh_now()
     provider.error = CalendarProviderError(CalendarState.OFFLINE)
     cache.refresh_now()
-    summary = cache.summary_for(now)
+    summary = cache.summary_for(NOW)
     assert summary.next is None
 
 
 def test_stale_summary_excludes_future_day_from_today_count(tmp_path):
-    now = local_noon("UTC")
     settings = Settings(
         data_dir=tmp_path,
-        timezone="UTC",
+        timezone="Africa/Lusaka",
         google_calendar_enabled=False,
         calendar_refresh_seconds=30,
         calendar_lookahead_days=7,
     )
-    later = event("later", now + timedelta(days=3), now + timedelta(days=3, hours=1))
+    later = event("later", NOW + timedelta(days=3), NOW + timedelta(days=3, hours=1))
     provider = FakeCalendarProvider([later])
     cache = CalendarCache(provider, settings)
     cache.refresh_now()
     provider.error = CalendarProviderError(CalendarState.OFFLINE)
     cache.refresh_now()
-    summary = cache.summary_for(now)
+    summary = cache.summary_for(NOW)
     assert summary.today_count == 0
 
 

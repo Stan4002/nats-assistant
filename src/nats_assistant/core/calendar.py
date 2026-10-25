@@ -1,4 +1,4 @@
-from datetime import timezone
+from datetime import datetime, timezone
 from enum import Enum
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
@@ -47,3 +47,5 @@ class CalendarSummary(BaseModel):
     next: CalendarEvent | None = None
     events: list[CalendarEvent] = Field(default_factory=list)
     truncated: bool = False
+    updated_at: datetime | None = None
+    stale: bool = False

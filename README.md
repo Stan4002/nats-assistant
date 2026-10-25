@@ -112,7 +112,9 @@ Existing task, capture, and top-level home fields are unchanged. The additive ca
     "today_count": 0,
     "next": null,
     "events": [],
-    "truncated": false
+    "truncated": false,
+    "updated_at": null,
+    "stale": false
   }
 }
 ```
@@ -173,6 +175,7 @@ curl http://127.0.0.1:8765/v1/home
 | `NATS_GOOGLE_CALENDAR_FETCH_LIMIT` | `200` | Retrieval cap; range `1–1000`, at most three pages |
 | `NATS_CALENDAR_MAX_EVENTS` | `20` | Today's response preview cap; range `1–100` |
 | `NATS_CALENDAR_LOOKAHEAD_DAYS` | `7` | Upcoming search window; range `1–31` |
+| `NATS_CALENDAR_REFRESH_SECONDS` | `120` | Background refresh interval; range `30–3600` |
 | `NATS_TIMEZONE` | System timezone or `UTC` | Daily home boundaries |
 
 Config paths expand `~` and are rejected if they resolve inside this source checkout. No auth files are created until you authenticate or refresh an existing token. Network I/O uses explicit timeouts with no event polling loop or calendar writes. The home route runs in FastAPI's worker pool; provider errors become controlled states. Token refresh and HTTP requests are individually bounded; this is not a guarantee of a strict wall-clock response deadline.
